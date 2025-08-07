@@ -1,0 +1,62 @@
+import streamlit as st
+import fitz  # PyMuPDF
+import pandas as pd
+import io
+
+def extract_invoice_info(pdf_file):
+    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    text = ""
+    for page in doc:
+        text += page.get_text()
+
+    result = {
+        "Hãng": "",
+        "No PEDIDO": "",
+        "FECHA OPERACIÓN/EXPEDICIÓN": "",
+        "No DOCUMENTO": "",
+        "IMPORTE": ""
+    }
+
+    if "ZARA ESPAÑA" in text:
+        result["Hãng"] = "ZARA ESPAÑA, S.A."
+
+    for line in text.splitlines():
+        if "Nº DOCUMENTO" in line:
+            result["No DOCUMENTO"] = line.split(":")[-1].strip()
+        elif "FECHA OPERACIÓN" in line:
+            result["FECHA OPERACIÓN/EXPEDICIÓN"] = line.split(":")[-1].strip()
+        elif "Nº PEDIDO" in line:
+            result["No PEDIDO"] = line.split(":")[-1].strip()
+        elif "IMPORTE EUR" in line:
+            idx = text.splitlines().index(line)
+            if idx + 1 < len(text.splitlines()):
+                result["IMPORTE"] = text.splitlines()[idx + 1].strip()
+
+    return result
+
+st.set_page_config(page_title="Trích xuất hóa đơn PDF", layout="centered")
+st.title("📄 Trích xuất hóa đơn PDF và xuất CSV")
+
+st.write("Tải lên file hóa đơn PDF để xem thông tin và tải kết quả dưới dạng CSV.")
+
+uploaded_file = st.file_uploader("📤 Chọn file PDF", type="pdf")
+
+if uploaded_file:
+    with st.spinner("⏳ Đang xử lý..."):
+        data = extract_invoice_info(uploaded_file)
+
+    if any(data.values()):
+        st.success("✅ Đã trích xuất thành công:")
+        st.dataframe(pd.DataFrame([data]))
+
+        df = pd.DataFrame([data])
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="📥 Tải kết quả CSV",
+            data=csv_buffer.getvalue(),
+            file_name="ket_qua_hoa_don.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("⚠️ Không tìm thấy dữ liệu phù hợp trong file PDF.")
